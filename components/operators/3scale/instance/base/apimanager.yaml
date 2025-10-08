@@ -1,0 +1,30 @@
+---
+apiVersion: apps.3scale.net/v1alpha1
+kind: APIManager
+metadata:
+  name: apimanager
+  namespace: 3scale
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  wildcardDomain: apps.example.com
+  tenantName: default
+  resourceRequirementsEnabled: false
+  system:
+    fileStorage:
+      persistentVolumeClaim:
+        storageClassName: ocs-storagecluster-cephfs
+  apicast:
+    stagingSpec:
+      customPolicies:
+        - name: remove-bearer
+          version: "0.1"
+          secretRef:
+             name: cp-bearer
+    productionSpec:
+      customPolicies:
+        - name: remove-bearer
+          version: "0.1"
+          secretRef:
+             name: cp-bearer
