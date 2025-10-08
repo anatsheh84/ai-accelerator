@@ -1,0 +1,39 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: apimanager-checker
+  namespace: 3scale
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 60
+  template:
+    metadata:
+      name: apimanager-checker
+    spec:
+      serviceAccountName: 3scale-status-checker
+      restartPolicy: Never
+      containers:
+      - name: checker
+        image: quay.io/agnosticd/ee-multicloud:v0.1.2
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          echo "Checking APIManager status..."
+          for i in {1..60}; do
+            STATUS=$(oc get apimanager apimanager -n 3scale -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "False")
+            if [ "$STATUS" == "True" ]; then
+              echo "APIManager is ready!"
+              exit 0
+            fi
+            echo "Waiting for APIManager to be ready... (attempt $i/60)"
+            sleep 5
+          done
+          echo "APIManager did not become ready in time"
+          exit 1
