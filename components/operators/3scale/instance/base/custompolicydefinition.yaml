@@ -1,0 +1,17 @@
+---
+apiVersion: capabilities.3scale.net/v1beta1
+kind: CustomPolicyDefinition
+metadata:
+  name: remove-bearer
+  namespace: 3scale
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  name: "Remove Bearer"
+  version: "0.1"
+  schema:
+    name: "Remove Bearer Token"
+    version: "0.1"
+    summary: "Removes Bearer prefix from Authorization header"
+    $schema: "http://json-schema.org/draft-07/schema#"
+    configuration: {}
