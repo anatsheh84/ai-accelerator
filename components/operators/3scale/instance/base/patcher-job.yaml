@@ -1,0 +1,31 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: 3scale-route-patcher
+  namespace: 3scale
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      serviceAccountName: 3scale-patcher
+      restartPolicy: Never
+      containers:
+      - name: route-patcher
+        image: quay.io/agnosticd/ee-multicloud:v0.1.2
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          echo "Patching 3scale routes with timeout annotations..."
+          oc annotate route -n 3scale \
+            -l zync.3scale.net/route-to=apicast-production \
+            haproxy.router.openshift.io/timeout=180s \
+            --overwrite
+          echo "Route patching complete"
