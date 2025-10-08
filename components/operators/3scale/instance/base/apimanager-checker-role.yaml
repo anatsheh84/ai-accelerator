@@ -1,0 +1,23 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: 3scale-status-checker
+  namespace: 3scale
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+rules:
+- apiGroups:
+  - operators.coreos.com
+  resources:
+  - clusterserviceversions
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - apps.3scale.net
+  resources:
+  - apimanagers
+  verbs:
+  - get
+  - list
