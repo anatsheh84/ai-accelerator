@@ -1,0 +1,11 @@
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: 3scale-operatorgroup
+  namespace: 3scale
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  targetNamespaces:
+  - 3scale
