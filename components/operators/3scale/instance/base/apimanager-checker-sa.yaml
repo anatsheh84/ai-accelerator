@@ -1,0 +1,8 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: 3scale-status-checker
+  namespace: 3scale
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
