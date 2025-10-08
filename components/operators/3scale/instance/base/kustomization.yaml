@@ -1,0 +1,35 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: 3scale
+
+resources:
+  - apimanager.yaml
+  - apimanager-checker-sa.yaml
+  - apimanager-checker-role.yaml
+  - apimanager-checker-rolebinding.yaml
+  - apimanager-checker-job.yaml
+  - custompolicydefinition.yaml
+  - secret-cpbearer-policy.yaml
+  - patcher-sa.yaml
+  - patcher-role.yaml
+  - patcher-rolebinding.yaml
+  - patcher-job.yaml
+
+configMapGenerator:
+  - name: 3scale-config
+    literals:
+      - WILDCARD_DOMAIN=apps.example.com
+
+replacements:
+  - source:
+      kind: ConfigMap
+      name: 3scale-config
+      fieldPath: data.WILDCARD_DOMAIN
+    targets:
+      - select:
+          kind: APIManager
+          name: apimanager
+        fieldPaths:
+          - spec.wildcardDomain
