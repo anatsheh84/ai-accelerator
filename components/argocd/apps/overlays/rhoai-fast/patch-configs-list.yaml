@@ -6,6 +6,14 @@ spec:
   generators:
   - list:
       elements:
+      # MachineSet scaler - runs first with sync-wave -5
+      - cluster: local
+        url: https://kubernetes.default.svc
+        values:
+          name: machineset-scaler
+          path: components/cluster-configs/machineset-scaler/overlays/default
+      
+      # Existing configs
       - cluster: local
         url: https://kubernetes.default.svc
         values:
