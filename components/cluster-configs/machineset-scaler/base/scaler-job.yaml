@@ -1,0 +1,90 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ensure-minimum-nodes
+  namespace: openshift-machine-api
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"  # Run before operators
+spec:
+  template:
+    metadata:
+      labels:
+        app: machineset-scaler
+    spec:
+      restartPolicy: Never
+      serviceAccountName: machineset-scaler
+      containers:
+      - name: scaler
+        image: registry.redhat.io/ubi8/ubi:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          
+          echo "========================================="
+          echo "MachineSet Scaler for ODF Prerequisites"
+          echo "========================================="
+          
+          # Install required tools
+          echo "Installing oc CLI..."
+          curl -s -L https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz | tar -xz -C /tmp
+          chmod +x /tmp/oc
+          
+          # Check current worker nodes
+          echo "Checking current worker node count..."
+          CURRENT_WORKERS=$(/tmp/oc get nodes -l node-role.kubernetes.io/worker --no-headers | wc -l)
+          echo "✓ Current worker nodes: $CURRENT_WORKERS"
+          
+          # Set minimum required nodes
+          MIN_NODES=3
+          
+          if [ "$CURRENT_WORKERS" -ge "$MIN_NODES" ]; then
+            echo "✓ Cluster already has $CURRENT_WORKERS worker nodes (>= $MIN_NODES required)"
+            echo "✓ No scaling required. ODF prerequisites met."
+            exit 0
+          fi
+          
+          echo "⚠ Need to scale up. Current: $CURRENT_WORKERS, Required: $MIN_NODES"
+          
+          # Find worker machinesets
+          echo "Finding worker MachineSet to scale..."
+          MACHINESETS=$(/tmp/oc get machinesets -n openshift-machine-api -l machine.openshift.io/cluster-api-machine-role=worker -o jsonpath='{.items[*].metadata.name}')
+          
+          if [ -z "$MACHINESETS" ]; then
+            echo "❌ ERROR: No worker MachineSet found!"
+            exit 1
+          fi
+          
+          # Get the first worker machineset
+          MACHINESET=$(echo $MACHINESETS | awk '{print $1}')
+          echo "✓ Found MachineSet: $MACHINESET"
+          
+          # Get current replicas
+          CURRENT_REPLICAS=$(/tmp/oc get machineset $MACHINESET -n openshift-machine-api -o jsonpath='{.spec.replicas}')
+          echo "✓ Current replicas: $CURRENT_REPLICAS"
+          
+          # Calculate needed replicas
+          NEEDED_ADDITIONAL=$((MIN_NODES - CURRENT_WORKERS))
+          NEW_REPLICAS=$((CURRENT_REPLICAS + NEEDED_ADDITIONAL))
+          
+          echo "📈 Scaling MachineSet '$MACHINESET' from $CURRENT_REPLICAS to $NEW_REPLICAS replicas"
+          
+          # Scale the machineset
+          /tmp/oc patch machineset $MACHINESET -n openshift-machine-api --type merge -p "{\"spec\":{\"replicas\":$NEW_REPLICAS}}"
+          
+          echo "✅ MachineSet scaling initiated"
+          echo "ℹ️  Note: New nodes will take 5-10 minutes to become ready"
+          echo "ℹ️  ODF deployment will wait for nodes to be available"
+          
+          # Optional: Wait for a short time to see if nodes start provisioning
+          echo "Waiting 60 seconds to verify scaling started..."
+          sleep 60
+          
+          NEW_MACHINE_COUNT=$(/tmp/oc get machines -n openshift-machine-api | grep -c $MACHINESET || true)
+          echo "✓ Total machines for $MACHINESET: $NEW_MACHINE_COUNT"
+          
+          echo "========================================="
+          echo "✅ MachineSet scaling completed successfully"
+          echo "========================================="

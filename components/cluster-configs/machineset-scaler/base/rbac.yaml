@@ -1,0 +1,31 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: machineset-scaler
+  namespace: openshift-machine-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: machineset-scaler
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list"]
+- apiGroups: ["machine.openshift.io"]
+  resources: ["machinesets", "machines"]
+  verbs: ["get", "list", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: machineset-scaler
+subjects:
+- kind: ServiceAccount
+  name: machineset-scaler
+  namespace: openshift-machine-api
+roleRef:
+  kind: ClusterRole
+  name: machineset-scaler
+  apiGroup: rbac.authorization.k8s.io
