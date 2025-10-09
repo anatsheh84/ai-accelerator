@@ -1,0 +1,100 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: odf-node-readiness-check
+  namespace: openshift-storage
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"  # After MachineSet scaling (-5), before ODF (2)
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: odf-node-checker
+      containers:
+      - name: node-checker
+        image: registry.redhat.io/ubi8/ubi:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          
+          echo "========================================="
+          echo "ODF Node Readiness Check"
+          echo "========================================="
+          
+          # Install oc CLI
+          curl -s -L https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz | tar -xz -C /tmp
+          chmod +x /tmp/oc
+          
+          # Wait for minimum 3 ready worker nodes
+          MIN_NODES=3
+          TIMEOUT=600  # 10 minutes
+          
+          echo "Waiting for at least $MIN_NODES ready worker nodes..."
+          echo "Timeout: $TIMEOUT seconds"
+          
+          start_time=$(date +%s)
+          while true; do
+            current_time=$(date +%s)
+            elapsed=$((current_time - start_time))
+            
+            if [ $elapsed -gt $TIMEOUT ]; then
+              echo "❌ TIMEOUT: Waited $TIMEOUT seconds for nodes to be ready"
+              exit 1
+            fi
+            
+            READY_WORKERS=$(/tmp/oc get nodes -l node-role.kubernetes.io/worker --no-headers | grep -c Ready || true)
+            echo "⏳ Ready worker nodes: $READY_WORKERS/$MIN_NODES (elapsed: ${elapsed}s)"
+            
+            if [ "$READY_WORKERS" -ge "$MIN_NODES" ]; then
+              echo "✅ SUCCESS: $READY_WORKERS worker nodes are ready"
+              echo "✅ ODF prerequisites satisfied"
+              break
+            fi
+            
+            echo "   Waiting 30 seconds..."
+            sleep 30
+          done
+          
+          # Additional check for node stability
+          echo "Verifying node stability for 60 seconds..."
+          sleep 60
+          
+          FINAL_COUNT=$(/tmp/oc get nodes -l node-role.kubernetes.io/worker --no-headers | grep -c Ready || true)
+          if [ "$FINAL_COUNT" -ge "$MIN_NODES" ]; then
+            echo "✅ Node count stable: $FINAL_COUNT ready worker nodes"
+            echo "✅ Proceeding with ODF deployment"
+          else
+            echo "❌ Node count unstable: $FINAL_COUNT ready worker nodes"
+            exit 1
+          fi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: odf-node-checker
+  namespace: openshift-storage
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: odf-node-checker
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: odf-node-checker
+subjects:
+- kind: ServiceAccount
+  name: odf-node-checker
+  namespace: openshift-storage
+roleRef:
+  kind: ClusterRole
+  name: odf-node-checker
+  apiGroup: rbac.authorization.k8s.io
